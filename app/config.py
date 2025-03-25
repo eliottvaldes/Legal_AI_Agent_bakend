@@ -1,8 +1,9 @@
 # app/config.py
+
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Carga las variables de entorno desde el archivo .env
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
