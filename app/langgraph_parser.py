@@ -1,7 +1,7 @@
 # app/langgraph_parser.py
 
 from typing import Dict, Any
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain.schema import HumanMessage
 from langgraph.graph import StateGraph, END
 from app.config import OPENAI_API_KEY
