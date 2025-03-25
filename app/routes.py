@@ -4,42 +4,55 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 from app.langgraph_parser import parse_message
-from app.crud import list_cases, update_cases, delete_cases
+from app.crud import list_cases, update_cases, delete_cases, create_case
 from app.config import OPENAI_API_KEY
 from openai import OpenAI
-import os
 
 router = APIRouter()
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Request model
+
 class ChatRequest(BaseModel):
+    """
+    Modelo de datos para la solicitud POST de /chat
+    """
     message: str
 
-# Response model
+
 class ChatResponse(BaseModel):
+    """
+    Modelo de datos para la respuesta de /chat
+    """
     success: bool
     message: str
     data: Optional[List[Dict[str, Any]]] = []
     errors: Optional[List[str]] = []
 
+
 @router.post("/chat", response_model=ChatResponse, status_code=200)
 async def chat_endpoint(payload: ChatRequest):
+    """
+    Punto de entrada principal para manejar las solicitudes de chat.
+    Analiza la intención del mensaje, extrae entidades y realiza la acción correspondiente.
+    """
     try:
         user_message = payload.message.strip()
 
-        # Parse message using LangGraph
+        # Procesa la intención y entidades del mensaje
         parsed_result = parse_message(user_message)
         intent = parsed_result.get("intent")
         entities = parsed_result.get("entities", {})
+        
+        print("*" * 50)
+        print(f'Parsed result: {parsed_result}')
+        print(f'User message: {user_message}')
+        print(f'Intent: {intent}')
+        print(f'Entities: {entities}')
+        print("*" * 50)
 
         if intent == "create_case":
-            # En este caso especial, el title es único y se hace una inserción manual (no SQL dinámico).
-            from app.db import get_connection
-            conn = get_connection()
-            cur = conn.cursor()
-
-            title = entities.get("title")
+            # Se maneja la creación de un nuevo caso
+            title = entities.get("title", "").strip()
             if not title:
                 return ChatResponse(
                     success=False,
@@ -47,61 +60,35 @@ async def chat_endpoint(payload: ChatRequest):
                     errors=["Campo 'title' requerido"]
                 )
 
-            # Check for duplicate title
-            cur.execute("SELECT * FROM Cases WHERE title = %s", (title,))
-            if cur.fetchone():
-                cur.close()
-                conn.close()
-                return ChatResponse(
-                    success=False,
-                    message=f"Ya existe un caso con el título ‘{title}’.",
-                    errors=[]
-                )
+            status_ = entities.get("status", "").strip()
+            description = entities.get("description", "").strip()
+            attorney = entities.get("attorney", "").strip()
 
-            status_ = entities.get("status", "")
-            description = entities.get("description", "")
-            attorney = entities.get("attorney", "")
+            result = create_case(title, status_, description, attorney)
+            return ChatResponse(**result)
 
-            insert_query = """
-                INSERT INTO Cases (title, status, description, attorney)
-                VALUES (%s, %s, %s, %s)
-                RETURNING id, title, status, description, attorney, created_at;
-            """
-            cur.execute(insert_query, (title, status_, description, attorney))
-            new_case = cur.fetchone()
-            conn.commit()
-            cur.close()
-            conn.close()
-
-            return ChatResponse(
-                success=True,
-                message=f"Nuevo caso creado: {new_case[1]}, estado {new_case[2]}.",
-                data=[{
-                    "id": new_case[0],
-                    "title": new_case[1],
-                    "status": new_case[2],
-                    "description": new_case[3],
-                    "attorney": new_case[4],
-                    "created_at": new_case[5].isoformat()
-                }],
-                errors=[]
-            )
-
-        elif intent == "read_cases":
+        elif intent == "read_cases" or intent == "'read_cases'":
+            # Lectura de casos vía SQL dinámico generado por OpenAI
             result = list_cases(user_message)
             return ChatResponse(**result)
 
-        elif intent == "update_case":
+        elif intent == "update_case" or intent == "'update_case'":
+            # Actualización de casos vía SQL dinámico generado por OpenAI
             result = update_cases(user_message)
             return ChatResponse(**result)
 
-        elif intent == "delete_case":
+        elif intent == "delete_case" or intent == "'delete_case'":
+            # Eliminación de casos vía SQL dinámico generado por OpenAI
             result = delete_cases(user_message)
             return ChatResponse(**result)
 
-        elif intent == "general_question":
+        elif intent == "general_question" or intent == "'general_question'":
+            
+            print("Entro a general_question")            
+            
+            # Consulta general a ChatGPT
             completion = openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "Responde con precisión y claridad."},
                     {"role": "user", "content": user_message}
@@ -109,7 +96,9 @@ async def chat_endpoint(payload: ChatRequest):
                 temperature=0.5,
                 max_tokens=300
             )
+            print(f"completion: {completion}")
             text = completion.choices[0].message.content.strip()
+            print(f"text: {text}")
             return ChatResponse(
                 success=True,
                 message=text,
@@ -118,6 +107,11 @@ async def chat_endpoint(payload: ChatRequest):
             )
 
         else:
+            
+            print(f'Intent no reconocida: {intent}')
+            print(f'Parsed result: {parsed_result}')            
+            
+            # Si no se detecta una intención reconocida
             return ChatResponse(
                 success=False,
                 message="No se pudo identificar la intención del mensaje.",
@@ -126,6 +120,7 @@ async def chat_endpoint(payload: ChatRequest):
             )
 
     except Exception as e:
+        print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
