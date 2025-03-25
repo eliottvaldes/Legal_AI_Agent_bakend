@@ -6,7 +6,7 @@ from app.db import create_cases_table
 app = FastAPI(title="Sistema Legal - Backend")
 
 # Execute table creation on application startup event (lifespan)
-@app.lifespan("startup")
+@app.on_event("startup")
 def startup_event():
     create_cases_table()
 
