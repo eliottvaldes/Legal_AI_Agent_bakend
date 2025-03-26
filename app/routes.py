@@ -8,20 +8,20 @@ from app.crud import list_cases, update_cases, delete_cases, create_case
 from app.config import OPENAI_API_KEY
 from openai import OpenAI
 
+# Define the FastAPI router
 router = APIRouter()
+# Create an instance of the OpenAI API client
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
-
 
 class ChatRequest(BaseModel):
     """
-    Modelo de datos para la solicitud POST de /chat
+    # Data model for POST request to /chat
     """
     message: str
 
-
 class ChatResponse(BaseModel):
     """
-    Modelo de datos para la respuesta de /chat
+    Data model for the response from /chat
     """
     success: bool
     message: str
@@ -32,26 +32,19 @@ class ChatResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse, status_code=200)
 async def chat_endpoint(payload: ChatRequest):
     """
-    Punto de entrada principal para manejar las solicitudes de chat.
-    Analiza la intención del mensaje, extrae entidades y realiza la acción correspondiente.
+    # Main entry point to handle chat requests.
+    Analyses the intent of the message, extracts entities, and performs the corresponding action.
     """
     try:
         user_message = payload.message.strip()
 
-        # Procesa la intención y entidades del mensaje
+        # Process the intent and entities of the message
         parsed_result = parse_message(user_message)
         intent = parsed_result.get("intent")
         entities = parsed_result.get("entities", {})
-        
-        print("*" * 50)
-        print(f'Parsed result: {parsed_result}')
-        print(f'User message: {user_message}')
-        print(f'Intent: {intent}')
-        print(f'Entities: {entities}')
-        print("*" * 50)
 
+        # Depending on the intent, perform the corresponding action
         if intent == "create_case":
-            # Se maneja la creación de un nuevo caso
             title = entities.get("title", "").strip()
             if not title:
                 return ChatResponse(
@@ -68,25 +61,20 @@ async def chat_endpoint(payload: ChatRequest):
             return ChatResponse(**result)
 
         elif intent == "read_cases" or intent == "'read_cases'":
-            # Lectura de casos vía SQL dinámico generado por OpenAI
             result = list_cases(user_message)
             return ChatResponse(**result)
 
         elif intent == "update_case" or intent == "'update_case'":
-            # Actualización de casos vía SQL dinámico generado por OpenAI
             result = update_cases(user_message)
             return ChatResponse(**result)
 
         elif intent == "delete_case" or intent == "'delete_case'":
-            # Eliminación de casos vía SQL dinámico generado por OpenAI
             result = delete_cases(user_message)
             return ChatResponse(**result)
 
         elif intent == "general_question" or intent == "'general_question'":
             
-            print("Entro a general_question")            
-            
-            # Consulta general a ChatGPT
+            # Use the OpenAI API to generate a response for general questions            
             completion = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -96,9 +84,7 @@ async def chat_endpoint(payload: ChatRequest):
                 temperature=0.5,
                 max_tokens=300
             )
-            print(f"completion: {completion}")
             text = completion.choices[0].message.content.strip()
-            print(f"text: {text}")
             return ChatResponse(
                 success=True,
                 message=text,
@@ -107,11 +93,8 @@ async def chat_endpoint(payload: ChatRequest):
             )
 
         else:
-            
-            print(f'Intent no reconocida: {intent}')
-            print(f'Parsed result: {parsed_result}')            
-            
-            # Si no se detecta una intención reconocida
+
+            # If no recognized intent is detected return an error message
             return ChatResponse(
                 success=False,
                 message="No se pudo identificar la intención del mensaje.",
