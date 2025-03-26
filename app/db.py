@@ -2,7 +2,6 @@
 
 import os
 import psycopg2
-from psycopg2 import sql
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,7 +9,7 @@ load_dotenv()
 
 def get_db_connection():
     """
-    Retorna una conexión a la base de datos PostgreSQL utilizando las variables de entorno.
+    Return a connection to the PostgreSQL database using environment variables.
     """
     return psycopg2.connect(
         host=os.getenv("DB_HOST"),
@@ -23,7 +22,7 @@ def get_db_connection():
 
 def create_cases_table():
     """
-    Crea la tabla "Cases" si no existe y define una restricción de unicidad en el campo 'title'.
+    # Create the "Cases" table if it does not exist and define a uniqueness constraint on the 'title' field.
     """
     conn = get_db_connection()
     cur = conn.cursor()
